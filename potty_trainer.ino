@@ -8,6 +8,8 @@
 // WiFi variables
 char wifiSsid[] = SECRET_SSID;
 char wifiPass[] = SECRET_PASS;
+
+
 int wifiPort = 80;
 char wifiServerAddress[] = "173.231.220.42";
 
@@ -23,7 +25,7 @@ HttpClient client = HttpClient(wifi, wifiServerAddress, wifiPort);
 Servo myservo;
 const int servoPin = 7;
 const int servoLidOpen = 130;
-const int servoLidClose = 180;
+const int servoLidClose = 70;
 
 // Ultrasonic (uss) sensor pins
 const int ussPingPin = 2;
@@ -35,14 +37,14 @@ int personDetected = 0;
 // Water level (wll) sensor
 const int wllPin = A1;
 const int wllPower = 3;
-const int wllWaterLevelHighMin = 100;
+const int wllWaterLevelHighMin = 80;
 int wllValue = 0;
 int toiletFlushed = 0;
 
 // Capacitive Sensor
 CapacitiveSensor capSensor = CapacitiveSensor(4, 5);
 const int capLedPin = 0;
-int capThreshold = 5000;
+int capThreshold = 11000;
 int faucetOn = 0;
 
 // Conditions
@@ -56,13 +58,12 @@ const int waitPeriodMins = 5;
 
 int msgConnectionSent = 0;
 
+int toiletFlushCounter = 0;
+
 void setup() {
   // initialize serial and wait for port to open
   Serial.begin(9600);
-  while (!Serial);
-
-  // attempt to connect to Wifi network:
-  //initiateWifiConnection();
+//  while (!Serial);
 
   // set up ultrasonic sensor
   pinMode(ussPingPin, OUTPUT);
@@ -85,7 +86,10 @@ void setup() {
   pinMode(BLUEPIN,  OUTPUT);
 
   // Flash the "hello" color sequence: R, G, B, black.
-  showColorBars();
+  showColorBars();  
+
+  // attempt to connect to Wifi network:
+  initiateWifiConnection();
 }
 
 void initiateWifiConnection() {
@@ -109,9 +113,9 @@ void loop() {
     sendText("Potty Trainer initiated.", msgConnectionSent);
   }
 
-//    runCapSensor();
-//    readWaterLevel();
-//    runUltrasonicSensor();
+  //    readCapSensor();
+  //    readWaterLevel();
+  //    readUltrasonicSensor();
   runLogic();
 }
 
@@ -220,14 +224,20 @@ int readWaterLevel() {
   wllValue = analogRead(wllPin);  // Read the analog value form sensor
   digitalWrite(wllPower, LOW);    // Turn the sensor OFF
 
-//    Serial.print("Water level: ");
-//    Serial.println(wllValue);
+  //    Serial.print("Water level: ");
+  //    Serial.println(wllValue);
 
   if (wllValue < wllWaterLevelHighMin) {
     // toilet was flushed
-    toiletFlushed = 1;
-    Serial.print("Toilet was flushed: ");
-    Serial.println(wllValue);
+    toiletFlushCounter += 1;
+
+    if (toiletFlushCounter > 5) {
+      toiletFlushed = 1;
+      toiletFlushCounter = 0;
+      
+      Serial.print("Toilet was flushed: ");
+      Serial.println(wllValue);
+    }
   }
 
   return wllValue;                // send current reading
@@ -242,8 +252,8 @@ void readUltrasonicSensor() {
   ussDuration = pulseIn(ussEchoPin, HIGH);
   ussInches = microsecondsToInches(ussDuration);
   ussCm = microsecondsToCentimeters(ussDuration);
-  //  Serial.print("Distance: ");
-  //  Serial.println(ussInches);
+  Serial.print("Distance: ");
+  Serial.println(ussInches);
 
   if (ussInches < personDetectedThreshold) {
     personDetected = 1;
@@ -262,7 +272,7 @@ void reset() {
   personFlushedToilet = 0;
   personUsedFaucet = 0;
   personLeftBathroom = 0;
-  
+
   // turn the LED off
   digitalWrite(capLedPin, LOW);
 
@@ -271,7 +281,7 @@ void reset() {
 
   // reset lights
   showAnalogRGB( CRGB::Black );
-    
+
   delay(1000 * waitPeriodMins);
 }
 
@@ -281,21 +291,19 @@ void sendText(String body, int &flag) {
 
   Serial.println(body);
 
-  //  Serial.println("Sending post request");
-  //  client.post("/api/potty-trainer", contentType, postData);
-  //  Serial.println("Finished request.");
+  Serial.println("Sending post request");
+  client.post("/api/potty-trainer", contentType, postData);
+  Serial.println("Finished request.");
 
   // read the status code and body of the response
-  //  int statusCode = client.responseStatusCode();
-  //  String response = client.responseBody();
+  int statusCode = client.responseStatusCode();
+  String response = client.responseBody();
 
-//  if (statusCode < 200) {
-//    flag = 0;
-//  } else {
-//    flag = 1;
-//  }
-
+  if (statusCode < 200) {
+    flag = 0;
+  } else {
     flag = 1;
+  }
 }
 
 
